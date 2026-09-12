@@ -1,0 +1,142 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>Loop Checker — Tag &amp; I/O Verification</title>
+<meta name="theme-color" content="#0f151b">
+<meta name="description" content="Field tool for verifying instrument tags and I/O against PLC addresses.">
+<link rel="manifest" href="manifest.json">
+<link rel="icon" href="icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="icon.svg">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Loop Checker">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<div class="app">
+
+  <header class="topbar">
+    <div class="topbar-title">
+      <span class="logo-mark" aria-hidden="true"></span>
+      <div>
+        <h1>Loop Checker</h1>
+        <p class="subtitle" id="saveIndicator">Tag &amp; I/O verification</p>
+      </div>
+    </div>
+    <button class="icon-btn" id="menuToggle" aria-label="Open tools menu" aria-expanded="false">
+      <svg viewBox="0 0 24 24" width="20" height="20"><path d="M4 6h16M4 12h16M4 18h16" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+    </button>
+  </header>
+
+  <div class="toolshelf" id="toolshelf">
+    <label class="tool-btn" for="csvInput">
+      <svg viewBox="0 0 24 24" width="16" height="16"><path d="M12 3v12m0 0l-4-4m4 4l4-4M4 21h16" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" fill="none"/></svg>
+      Import CSV
+    </label>
+    <input type="file" id="csvInput" accept=".csv,text/csv" hidden>
+
+    <button class="tool-btn" id="exportBtn">
+      <svg viewBox="0 0 24 24" width="16" height="16"><path d="M12 21V9m0 0l-4 4m4-4l4 4M4 3h16" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" fill="none"/></svg>
+      Export CSV
+    </button>
+
+    <button class="tool-btn" id="addTagBtn">
+      <svg viewBox="0 0 24 24" width="16" height="16"><path d="M12 5v14M5 12h14" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+      Add tag
+    </button>
+
+    <button class="tool-btn" id="handoverBtn">
+      <svg viewBox="0 0 24 24" width="16" height="16"><path d="M4 4h16v12H8l-4 4V4z" stroke="currentColor" stroke-width="2" stroke-linejoin="round" fill="none"/></svg>
+      Handover note
+    </button>
+
+    <button class="tool-btn" id="selectModeBtn">
+      <svg viewBox="0 0 24 24" width="16" height="16"><path d="M5 12l4 4 10-10" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" fill="none"/></svg>
+      Select
+    </button>
+
+    <button class="tool-btn tool-btn-warn" id="clearBtn">
+      <svg viewBox="0 0 24 24" width="16" height="16"><path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" fill="none"/></svg>
+      Clear list
+    </button>
+  </div>
+
+  <div class="statusbar" id="statusbar"></div>
+
+  <div class="searchbar">
+    <svg viewBox="0 0 24 24" width="16" height="16" class="search-icon"><circle cx="11" cy="11" r="7" stroke="currentColor" stroke-width="2" fill="none"/><path d="M21 21l-4.3-4.3" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+    <input type="text" id="searchInput" placeholder="Search tag, description, or address">
+    <div class="filter-row">
+      <div class="filter-chips" id="filterChips">
+        <button class="chip" data-filter="all">All</button>
+        <button class="chip chip-unset" data-filter="unset">Unchecked</button>
+        <button class="chip chip-checked" data-filter="checked">Checked</button>
+        <button class="chip chip-forced" data-filter="forced">Forced</button>
+        <button class="chip chip-fault" data-filter="fault">Fault</button>
+      </div>
+      <select id="sortSelect" class="sort-select" aria-label="Sort tags">
+        <option value="default">Sort: default</option>
+        <option value="fault-first">Sort: fault first</option>
+        <option value="name">Sort: tag name</option>
+        <option value="updated">Sort: last updated</option>
+      </select>
+    </div>
+  </div>
+
+  <main class="list" id="tagList" aria-live="polite"></main>
+
+  <p class="empty-state" id="emptyState" hidden>No tags match this view. Import a CSV or add a tag to get started.</p>
+
+  <div class="bulk-bar" id="bulkBar" hidden>
+    <span id="bulkCount">0 selected</span>
+    <div class="bulk-actions">
+      <button class="bulk-btn bulk-checked" data-s="checked">Mark checked</button>
+      <button class="bulk-btn bulk-forced" data-s="forced">Mark forced</button>
+      <button class="bulk-btn bulk-cancel" id="bulkCancel">Cancel</button>
+    </div>
+  </div>
+
+</div>
+
+<template id="addFormTemplate">
+  <div class="add-form" id="addForm">
+    <div class="field-row">
+      <label>Tag<input type="text" id="f_tag" placeholder="FT-101"></label>
+      <label>PLC<input type="text" id="f_plc" placeholder="Siemens S7"></label>
+    </div>
+    <label class="field-full">Description<input type="text" id="f_desc" placeholder="Flow transmitter — chiller header"></label>
+    <label class="field-full">Address<input type="text" id="f_addr" placeholder="DB10.DBD24"></label>
+    <div class="add-form-actions">
+      <button class="btn-ghost" id="f_cancel">Cancel</button>
+      <button class="btn-solid" id="f_save">Save tag</button>
+    </div>
+  </div>
+</template>
+
+<div class="modal-backdrop" id="handoverModal" hidden>
+  <div class="modal">
+    <div class="modal-head">
+      <h2>Shift handover note</h2>
+      <button class="icon-btn" id="handoverClose" aria-label="Close">
+        <svg viewBox="0 0 24 24" width="18" height="18"><path d="M6 6l12 12M18 6L6 18" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+      </button>
+    </div>
+    <textarea id="handoverText" class="handover-text" readonly></textarea>
+    <div class="modal-actions">
+      <button class="btn-ghost" id="handoverShare">Share</button>
+      <button class="btn-solid" id="handoverCopy">Copy</button>
+    </div>
+  </div>
+</div>
+
+<input type="file" id="photoInput" accept="image/*" capture="environment" hidden>
+
+<script src="app.js"></script>
+</body>
+</html>
