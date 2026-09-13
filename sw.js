@@ -1,4 +1,4 @@
-const CACHE_NAME = "loop-checker-v1";
+const CACHE_NAME = "loop-checker-v2"; // bumped so this update is detected and installed fresh
 const SHELL_FILES = [
   "./",
   "./index.html",
@@ -24,21 +24,22 @@ self.addEventListener("activate", (event) => {
   self.clients.claim();
 });
 
-// Cache-first for the app shell, network fallback for everything else (e.g. Google Fonts).
+// Network-first: whenever you're online, always fetch the current file from
+// GitHub and refresh the cache with it. Only fall back to the cached copy if
+// the network request fails (i.e. you're actually offline). This is the fix —
+// the old version cached the app once and never checked for updates again.
 self.addEventListener("fetch", (event) => {
   if (event.request.method !== "GET") return;
+
   event.respondWith(
-    caches.match(event.request).then((cached) => {
-      if (cached) return cached;
-      return fetch(event.request)
-        .then((response) => {
-          if (response && response.status === 200 && response.type === "basic") {
-            const copy = response.clone();
-            caches.open(CACHE_NAME).then((cache) => cache.put(event.request, copy));
-          }
-          return response;
-        })
-        .catch(() => cached);
-    })
+    fetch(event.request)
+      .then((response) => {
+        if (response && response.status === 200) {
+          const copy = response.clone();
+          caches.open(CACHE_NAME).then((cache) => cache.put(event.request, copy));
+        }
+        return response;
+      })
+      .catch(() => caches.match(event.request))
   );
 });
