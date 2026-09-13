@@ -318,6 +318,7 @@
     const show = shelfVisible();
     el.toolshelf.style.display = show ? "flex" : "none";
     el.menuToggle.setAttribute("aria-expanded", String(show));
+    el.menuToggle.classList.toggle("active", el.toolshelf.classList.contains("force-open"));
   }
   el.menuToggle.addEventListener("click", () => {
     el.toolshelf.classList.toggle("force-open");
@@ -338,7 +339,7 @@
 
     document.getElementById("f_cancel").addEventListener("click", () => form.remove());
     document.getElementById("f_save").addEventListener("click", () => {
-      const tagId = document.getElementById("f_tag").value.trim();
+      const tagId = document.getElementById("f_tag").value.trim().toUpperCase();
       if (!tagId) { document.getElementById("f_tag").focus(); return; }
       if (tags.some((t) => t.tag.toLowerCase() === tagId.toLowerCase())) {
         alert(`Tag "${tagId}" already exists.`);
@@ -630,7 +631,7 @@
       .map((r) => {
         const rawStatus = (idx.status !== undefined ? r[idx.status] || "" : "").trim().toLowerCase();
         return {
-          tag: (r[idx.tag] || "").trim(),
+          tag: (r[idx.tag] || "").trim().toUpperCase(),
           desc: idx.desc !== undefined ? (r[idx.desc] || "").trim() : "",
           plc: idx.plc !== undefined ? (r[idx.plc] || "").trim() : "",
           addr: idx.addr !== undefined ? (r[idx.addr] || "").trim() : "",
