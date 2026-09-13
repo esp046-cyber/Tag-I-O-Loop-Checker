@@ -199,7 +199,8 @@
     outline: none;
   }
   #searchInput:focus { border-color: var(--cyan-dim); }
-  #searchInput::placeholder { color: var(--text-faint); }
+  #searchInput { color: #f3f4f6; }
+  #searchInput::placeholder { color: #9ca3af; opacity: 1; }
 
   .sort-trigger {
     flex-shrink: 0;
@@ -355,6 +356,7 @@
   }
   .photo-thumb-wrap { position: relative; flex-shrink: 0; }
   .photo-thumb { width: 52px; height: 52px; object-fit: cover; border-radius: var(--radius-sm); border: 1px solid var(--border); cursor: pointer; }
+  .photo-saving { font-size: 11px; color: var(--text-faint); font-style: italic; }
   .photo-remove {
     position: absolute; top: -6px; right: -6px; width: 18px; height: 18px; border-radius: 50%;
     background: var(--fault); color: #2a0a0b; border: none; font-size: 12px; line-height: 1; cursor: pointer;
@@ -417,6 +419,7 @@
     background: var(--panel); color: var(--text);
   }
   .bulk-cancel { color: var(--text-dim); }
+  .bulk-primary { background: var(--checked); border-color: var(--checked); color: #052e1f; }
 
   /* ---------------- FAB ---------------- */
 
@@ -538,6 +541,41 @@
   ::-webkit-scrollbar { height: 6px; width: 6px; }
   ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 4px; }
 
+  /* ---------------- Toast ---------------- */
+
+  .toast {
+    position: fixed;
+    left: 50%;
+    bottom: calc(24px + var(--safe-bottom));
+    transform: translate(-50%, 12px);
+    background: var(--panel-alt);
+    border: 1px solid var(--border);
+    color: var(--text);
+    font-size: 13px;
+    font-weight: 500;
+    padding: 12px 18px;
+    border-radius: 100px;
+    box-shadow: 0 12px 32px rgba(0, 0, 0, 0.4);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    z-index: 100;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.2s ease, transform 0.2s ease;
+    max-width: calc(100% - 40px);
+  }
+  .toast.visible { opacity: 1; transform: translate(-50%, 0); }
+  .toast-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; background: var(--cyan); }
+  .toast.toast-success .toast-dot { background: var(--checked); }
+  .toast.toast-error .toast-dot { background: var(--fault); }
+  .toast-spinner {
+    width: 12px; height: 12px; border-radius: 50%; flex-shrink: 0;
+    border: 2px solid var(--border); border-top-color: var(--cyan);
+    animation: spin 0.7s linear infinite;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
   @media (prefers-reduced-motion: reduce) {
     .card-chevron, .seg-indicator, .sheet { transition: none; animation: none; }
   }
@@ -585,9 +623,8 @@
   <div class="bulk-bar" id="bulkBar">
     <span id="bulkCount">0 selected</span>
     <div class="bulk-actions">
-      <button class="bulk-btn" data-s="checked">Mark checked</button>
-      <button class="bulk-btn" data-s="forced">Mark forced</button>
       <button class="bulk-btn bulk-cancel" id="bulkCancel">Cancel</button>
+      <button class="bulk-btn bulk-primary" data-s="checked">Mark Checked</button>
     </div>
   </div>
 
@@ -622,6 +659,10 @@
     <button class="sheet-item" id="sheetHandover">
       <svg viewBox="0 0 24 24" width="18" height="18"><path d="M4 4h16v12H8l-4 4V4z" stroke="currentColor" stroke-width="2" stroke-linejoin="round" fill="none"/></svg>
       Handover note
+    </button>
+    <button class="sheet-item" id="sheetSync">
+      <svg viewBox="0 0 24 24" width="18" height="18"><path d="M4 4v6h6M20 20v-6h-6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" fill="none"/><path d="M20 10a8 8 0 00-14.3-4.3M4 14a8 8 0 0014.3 4.3" stroke="currentColor" stroke-width="2" stroke-linecap="round" fill="none"/></svg>
+      Sync to Workspace
     </button>
     <button class="sheet-item sheet-item-danger" id="sheetClear">
       <svg viewBox="0 0 24 24" width="18" height="18"><path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" fill="none"/></svg>
@@ -667,6 +708,11 @@
 
 <div class="photo-lightbox" id="photoLightbox"><img id="photoLightboxImg" alt="Tag photo"></div>
 
+<div class="toast" id="toast" role="status" aria-live="polite">
+  <span class="toast-dot" id="toastDot"></span>
+  <span id="toastMessage"></span>
+</div>
+
 <input type="file" id="csvInput" accept=".csv,text/csv" hidden>
 <input type="file" id="photoInput" accept="image/*" capture="environment" hidden>
 
@@ -690,12 +736,12 @@
   })();
 
   const SEED_TAGS = [
-    { tag: "FT-101", desc: "Flow transmitter — chiller header", plc: "Siemens S7", addr: "DB10.DBD24", status: "checked", notes: "Verified against BTU meter reading.", updated: "2026-09-10 08:14", photo: null, raw: "12.3 mA", pv: "45.2 GPM" },
-    { tag: "PT-204", desc: "Pressure transmitter — condenser return", plc: "Rockwell CLX", addr: "N7:22", status: "fault", notes: "Reads 0 psi, physical gauge shows 42 psi. Suspect wiring.", updated: "2026-09-11 14:02", photo: null, raw: "0.0 mA", pv: "42 psi (actual)" },
-    { tag: "TT-118", desc: "Temp transmitter — supply header, District Cooling Plant 3", plc: "ABB AC500", addr: "%MW118", status: "forced", notes: "Forced to 6.5°C while sensor is on order.", updated: "2026-09-11 09:47", photo: null, raw: "", pv: "6.5 °C (forced)" },
-    { tag: "PU-301-RUN", desc: "Primary pump 1 — run feedback", plc: "Siemens S7", addr: "DB12.DBX2.0", status: "checked", notes: "", updated: "2026-09-09 16:20", photo: null, raw: "", pv: "" },
-    { tag: "PU-301-FLT", desc: "Primary pump 1 — fault relay", plc: "Siemens S7", addr: "DB12.DBX2.1", status: "unset", notes: "", updated: "", photo: null, raw: "", pv: "" },
-    { tag: "LSH-410", desc: "High level switch — cold water tank, Pumping Station 2", plc: "Rockwell CLX", addr: "N7:41", status: "unset", notes: "", updated: "", photo: null, raw: "", pv: "" },
+    { tag: "FT-101", desc: "Flow transmitter — chiller header", plc: "Siemens S7", addr: "DB10.DBD24", status: "checked", notes: "Verified against BTU meter reading.", updated: "2026-09-10 08:14", photo: null, photoPreviewUrl: null, raw: "12.3 mA", pv: "45.2 GPM" },
+    { tag: "PT-204", desc: "Pressure transmitter — condenser return", plc: "Rockwell CLX", addr: "N7:22", status: "fault", notes: "Reads 0 psi, physical gauge shows 42 psi. Suspect wiring.", updated: "2026-09-11 14:02", photo: null, photoPreviewUrl: null, raw: "0.0 mA", pv: "42 psi (actual)" },
+    { tag: "TT-118", desc: "Temp transmitter — supply header, District Cooling Plant 3", plc: "ABB AC500", addr: "%MW118", status: "forced", notes: "Forced to 6.5°C while sensor is on order.", updated: "2026-09-11 09:47", photo: null, photoPreviewUrl: null, raw: "", pv: "6.5 °C (forced)" },
+    { tag: "PU-301-RUN", desc: "Primary pump 1 — run feedback", plc: "Siemens S7", addr: "DB12.DBX2.0", status: "checked", notes: "", updated: "2026-09-09 16:20", photo: null, photoPreviewUrl: null, raw: "", pv: "" },
+    { tag: "PU-301-FLT", desc: "Primary pump 1 — fault relay", plc: "Siemens S7", addr: "DB12.DBX2.1", status: "unset", notes: "", updated: "", photo: null, photoPreviewUrl: null, raw: "", pv: "" },
+    { tag: "LSH-410", desc: "High level switch — cold water tank, Pumping Station 2", plc: "Rockwell CLX", addr: "N7:41", status: "unset", notes: "", updated: "", photo: null, photoPreviewUrl: null, raw: "", pv: "" },
   ];
 
   function loadTags() {
@@ -705,7 +751,7 @@
         if (raw) {
           const parsed = JSON.parse(raw);
           // Backfill fields for tags saved before raw/pv existed.
-          return parsed.map((t) => ({ raw: "", pv: "", photo: null, ...t }));
+          return parsed.map((t) => ({ raw: "", pv: "", photo: null, ...t, photoPreviewUrl: null }));
         }
       } catch (e) { /* fall through to seed */ }
     }
@@ -769,6 +815,10 @@
     sheetExport: document.getElementById("sheetExport"),
     sheetSelect: document.getElementById("sheetSelect"),
     sheetHandover: document.getElementById("sheetHandover"),
+    sheetSync: document.getElementById("sheetSync"),
+    toast: document.getElementById("toast"),
+    toastDot: document.getElementById("toastDot"),
+    toastMessage: document.getElementById("toastMessage"),
     sheetClear: document.getElementById("sheetClear"),
     handoverModal: document.getElementById("handoverModal"),
     handoverText: document.getElementById("handoverText"),
@@ -881,11 +931,12 @@
             <label class="value-field"><span>Process value (EU)</span><input class="value-input" data-field="pv" value="${escapeHtml(t.pv || "")}" placeholder="e.g. 45.2 °C"></label>
           </div>
           <div class="photo-row">
-            ${t.photo
+            ${(t.photoPreviewUrl || t.photo)
               ? `<div class="photo-thumb-wrap">
-                   <img class="photo-thumb" src="${t.photo}" data-action="view-photo" alt="Photo for ${escapeHtml(t.tag)}" tabindex="0" role="button" aria-label="View photo for ${escapeHtml(t.tag)}">
+                   <img class="photo-thumb" src="${t.photoPreviewUrl || t.photo}" data-action="view-photo" alt="Photo for ${escapeHtml(t.tag)}" tabindex="0" role="button" aria-label="View photo for ${escapeHtml(t.tag)}">
                    <button class="photo-remove" data-action="remove-photo" aria-label="Remove photo">&times;</button>
-                 </div>`
+                 </div>
+                 ${t.photoPreviewUrl && !t.photo ? `<span class="photo-saving">Saving…</span>` : ""}`
               : `<button class="photo-btn" data-action="add-photo">
                    <svg viewBox="0 0 24 24" width="15" height="15"><path d="M4 8h3l2-3h6l2 3h3v12H4z" stroke="currentColor" stroke-width="2" stroke-linejoin="round" fill="none"/><circle cx="12" cy="14" r="3.2" stroke="currentColor" stroke-width="2" fill="none"/></svg>
                    Add photo
@@ -972,16 +1023,19 @@
 
     const viewPhoto = card.querySelector('[data-action="view-photo"]');
     if (viewPhoto) {
-      viewPhoto.addEventListener("click", () => openLightbox(t.photo));
+      const src = t.photoPreviewUrl || t.photo;
+      viewPhoto.addEventListener("click", () => openLightbox(src));
       viewPhoto.addEventListener("keydown", (e) => {
-        if (e.key === "Enter" || e.key === " ") { e.preventDefault(); openLightbox(t.photo); }
+        if (e.key === "Enter" || e.key === " ") { e.preventDefault(); openLightbox(src); }
       });
     }
 
     const removePhoto = card.querySelector('[data-action="remove-photo"]');
     if (removePhoto) {
       removePhoto.addEventListener("click", () => {
+        if (t.photoPreviewUrl) URL.revokeObjectURL(t.photoPreviewUrl);
         t.photo = null;
+        t.photoPreviewUrl = null;
         touch(t);
         saveTags();
         render();
@@ -1056,6 +1110,60 @@
     el.handoverText.value = buildHandoverNote();
     el.handoverModal.classList.add("open");
   });
+
+  /* ---------------- Toast ---------------- */
+
+  let toastTimer = null;
+  function showToast(message, state) {
+    // state: "loading" | "success" | "error"
+    clearTimeout(toastTimer);
+    el.toast.classList.remove("toast-success", "toast-error");
+    el.toastMessage.textContent = message;
+    el.toastDot.className = state === "loading" ? "toast-spinner" : "toast-dot";
+    if (state === "success") el.toast.classList.add("toast-success");
+    if (state === "error") el.toast.classList.add("toast-error");
+    el.toast.classList.add("visible");
+    if (state !== "loading") {
+      toastTimer = setTimeout(() => el.toast.classList.remove("visible"), 3000);
+    }
+  }
+
+  /* ---------------- n8n webhook sync ---------------- */
+  // Replace with your real n8n webhook URL before using this in the field —
+  // this placeholder will always fail, which is expected until it's set.
+  const N8N_WEBHOOK_URL = "https://[your-n8n-ip]/webhook/loop-checker-sync";
+
+  async function syncToWorkspace() {
+    showToast("Syncing to workspace…", "loading");
+    try {
+      const raw = storageAvailable ? localStorage.getItem(STORAGE_KEY) : JSON.stringify(tags);
+      const payload = {
+        source: "loop-checker",
+        syncedAt: new Date().toISOString(),
+        tags: raw ? JSON.parse(raw) : tags,
+      };
+
+      const response = await fetch(N8N_WEBHOOK_URL, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+
+      if (!response.ok) throw new Error(`Server responded ${response.status}`);
+      buzz(30);
+      showToast("Sync successful", "success");
+    } catch (err) {
+      // Expected while N8N_WEBHOOK_URL is still the placeholder — this is
+      // not a bug, it's the actual failure path a real network error takes.
+      showToast("Sync failed — check connection or webhook URL", "error");
+    }
+  }
+
+  el.sheetSync.addEventListener("click", () => {
+    closeSheet(el.menuSheetBackdrop);
+    syncToWorkspace();
+  });
+
   el.sheetClear.addEventListener("click", () => {
     closeSheet(el.menuSheetBackdrop);
     if (tags.length === 0) return;
@@ -1095,7 +1203,7 @@
       desc: document.getElementById("f_desc").value.trim(),
       plc: document.getElementById("f_plc").value.trim(),
       addr: document.getElementById("f_addr").value.trim(),
-      status: "unset", notes: "", updated: "", photo: null, raw: "", pv: "",
+      status: "unset", notes: "", updated: "", photo: null, photoPreviewUrl: null, raw: "", pv: "",
     });
     closeSheet(el.addSheetBackdrop);
     buzz(30);
@@ -1118,13 +1226,22 @@
     const s = btn.dataset.s;
     tags.forEach((t) => { if (selectedTags.has(t.tag)) { t.status = s; touch(t); } });
     selectedTags.clear();
+    selectMode = false;
     buzz(30);
     saveTags();
     render();
   });
-  el.bulkCancel.addEventListener("click", () => { selectedTags.clear(); render(); });
+  el.bulkCancel.addEventListener("click", () => { selectedTags.clear(); selectMode = false; render(); });
 
   /* ---------------- Photo capture ---------------- */
+  // Tapping "Add photo" opens the input below (capture="environment" targets
+  // the rear camera directly on mobile). We show the photo instantly via
+  // URL.createObjectURL() — a live reference to the file with no encoding
+  // delay — then quietly convert it to a compressed base64 string in the
+  // background and swap it in once ready. Blob URLs from createObjectURL
+  // only last for the current page session, so persistence relies on that
+  // background base64 swap; the same tag object holds a `photoPreviewUrl`
+  // (session-only, instant) and `photo` (base64, what actually gets saved).
 
   el.photoInput.addEventListener("change", (e) => {
     const file = e.target.files[0];
@@ -1133,11 +1250,16 @@
     const t = tags.find((x) => x.tag === forTag);
     if (!t) return;
 
+    if (t.photoPreviewUrl) URL.revokeObjectURL(t.photoPreviewUrl);
+    t.photoPreviewUrl = URL.createObjectURL(file);
+    touch(t);
+    render(); // instant thumbnail, no encoding wait
+
     const reader = new FileReader();
     reader.onload = () => {
       resizeImage(reader.result, 900, 0.65).then((dataUrl) => {
+        if (t.photoPreviewUrl) { URL.revokeObjectURL(t.photoPreviewUrl); t.photoPreviewUrl = null; }
         t.photo = dataUrl;
-        touch(t);
         saveTags();
         render();
       });
@@ -1327,7 +1449,7 @@
           notes: idx.notes !== undefined ? (r[idx.notes] || "").trim() : "",
           raw: idx.raw !== undefined ? (r[idx.raw] || "").trim() : "",
           pv: idx.pv !== undefined ? (r[idx.pv] || "").trim() : "",
-          updated: "", photo: null,
+          updated: "", photo: null, photoPreviewUrl: null,
         };
       })
       .filter((t) => t.tag !== "");
@@ -1358,7 +1480,7 @@
     let added = 0, updated = 0;
     imported.forEach((incoming) => {
       const existing = tags.find((t) => t.tag.toLowerCase() === incoming.tag.toLowerCase());
-      if (existing) { Object.assign(existing, incoming, { tag: existing.tag, photo: existing.photo }); updated++; }
+      if (existing) { Object.assign(existing, incoming, { tag: existing.tag, photo: existing.photo, photoPreviewUrl: existing.photoPreviewUrl }); updated++; }
       else { tags.push(incoming); added++; }
     });
     alert(`Import complete: ${added} tag${added === 1 ? "" : "s"} added, ${updated} updated.`);
