@@ -738,3 +738,12 @@ body {
   /* The toolbar is always visible at this width, so the toggle does nothing — hide it. */
   #menuToggle { display: none; }
 }
+
+/* ---------------- Fix: author display rules must not defeat [hidden] ---------------- */
+/* .modal-backdrop and .bulk-bar set their own `display`, which otherwise
+   overrides the browser's built-in [hidden] rule. This restores it. */
+
+.modal-backdrop[hidden],
+.bulk-bar[hidden] {
+  display: none !important;
+}
