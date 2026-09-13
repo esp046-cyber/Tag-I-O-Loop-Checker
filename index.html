@@ -279,6 +279,7 @@
     padding: 0 18px;
     opacity: 0;
     background: transparent;
+    pointer-events: none; /* decorative only — must never intercept taps on card-body controls beneath it */
   }
   .swipe-icon {
     font-size: 12px;
@@ -742,7 +743,13 @@
     <h2>Add tag</h2>
     <div class="field-row">
       <label>Tag<input type="text" id="f_tag" placeholder="FT-101" autocapitalize="characters"></label>
-      <label>PLC<input type="text" id="f_plc" placeholder="Siemens S7"></label>
+      <label>PLC<input type="text" id="f_plc" list="plc-list" placeholder="Siemens S7"></label>
+      <datalist id="plc-list">
+        <option value="Siemens S7">
+        <option value="Rockwell CLX">
+        <option value="ABB AC500">
+        <option value="Modbus RTU">
+      </datalist>
     </div>
     <label class="field-full">Description<input type="text" id="f_desc" placeholder="Flow transmitter — chiller header"></label>
     <label class="field-full">Address<input type="text" id="f_addr" placeholder="DB10.DBD24"></label>
@@ -762,7 +769,7 @@
         <svg viewBox="0 0 24 24" width="18" height="18"><path d="M6 6l12 12M18 6L6 18" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
       </button>
     </div>
-    <textarea id="handoverText" class="handover-text" readonly></textarea>
+    <textarea id="handoverText" class="handover-text"></textarea>
     <div class="modal-actions">
       <button class="btn-ghost" id="handoverShare">Share</button>
       <button class="btn-solid" id="handoverCopy">Copy</button>
@@ -874,6 +881,8 @@
   let openTagId = null;
   let selectMode = false;
   let selectedTags = new Set();
+  let lastUsedPLC = "";
+  let lastSavedTag = null;
   let recognizer = null;
   let listeningForTag = null;
 
@@ -1198,32 +1207,41 @@
     const saveNextBtn = card.querySelector('[data-action="save-next"]');
     if (saveNextBtn) {
       saveNextBtn.addEventListener("click", () => {
-        // Read fields directly rather than relying on blur-triggered "change"
-        // events having already fired — this button can be tapped straight
-        // from an in-progress edit.
+        // Capture in-progress edits before saving. saveTags() only persists
+        // whatever is already in the `tags` array — it doesn't read the DOM.
+        // Without this, a note you're still typing (not yet blurred) would
+        // be silently discarded the instant this button is tapped.
         if (notesField) t.notes = notesField.value;
         card.querySelectorAll(".value-input").forEach((input) => { t[input.dataset.field] = input.value; });
         touch(t);
-        buzz(25);
+        const timestampEl = card.querySelector(".timestamp");
+        if (timestampEl) timestampEl.textContent = "Updated " + t.updated;
+
+        // a) save
         saveTags();
 
-        const visible = getVisibleTags();
-        const idx = visible.findIndex((x) => x.tag === t.tag);
-        const next = idx !== -1 ? visible[idx + 1] : undefined;
+        // b) collapse the current card
+        card.classList.remove("open");
 
-        openTagId = next ? next.tag : null;
-        render();
+        // c) find the next card in the DOM
+        const nextCard = card.nextElementSibling;
 
-        if (next) {
-          requestAnimationFrame(() => {
-            const nextCard = [...document.querySelectorAll(".card")].find((c) => c.dataset.tag === next.tag);
-            if (nextCard && typeof nextCard.scrollIntoView === "function") {
-              nextCard.scrollIntoView({ behavior: "smooth", block: "center" });
-            }
-          });
+        // d) open it and scroll it into view
+        if (nextCard && nextCard.classList.contains("card")) {
+          nextCard.classList.add("open");
+          if (typeof nextCard.scrollIntoView === "function") {
+            nextCard.scrollIntoView({ behavior: "smooth", block: "start" });
+          }
+          // Keep app state in sync with this direct DOM change — otherwise
+          // the next unrelated render() (a search keystroke, a filter tap)
+          // rebuilds the list from openTagId and silently undoes this.
+          openTagId = nextCard.dataset.tag;
         } else {
+          openTagId = null;
           showToast("End of list — nothing left to check here", "success");
         }
+
+        buzz(25);
       });
     }
 
@@ -1392,14 +1410,27 @@
 
   /* ---------------- FAB + add-tag sheet ---------------- */
 
+  // Increment a tag's trailing number, preserving leading-zero width where
+  // possible ("FT-005" -> "FT-006"). Tags with no trailing digits are
+  // returned unchanged — the caller falls back to a blank field in that case.
+  function incrementTag(tagStr) {
+    const m = tagStr.match(/^(.*?)(\d+)$/);
+    if (!m) return null;
+    const prefix = m[1];
+    const digits = m[2];
+    const nextNum = String(Number(digits) + 1).padStart(digits.length, "0");
+    return prefix + nextNum;
+  }
+
   el.fabAdd.addEventListener("click", () => {
     buzz(20);
-    document.getElementById("f_tag").value = "";
-    document.getElementById("f_plc").value = "";
+    const tagInput = document.getElementById("f_tag");
+    tagInput.value = lastSavedTag ? (incrementTag(lastSavedTag) || "") : "";
+    document.getElementById("f_plc").value = lastUsedPLC;
     document.getElementById("f_desc").value = "";
     document.getElementById("f_addr").value = "";
     openSheet(el.addSheetBackdrop);
-    setTimeout(() => document.getElementById("f_tag").focus(), 250);
+    setTimeout(() => { tagInput.focus(); tagInput.select(); }, 250);
   });
   el.addSheetBackdrop.addEventListener("click", (e) => {
     if (e.target === el.addSheetBackdrop) closeSheet(el.addSheetBackdrop);
@@ -1412,13 +1443,16 @@
       alert(`Tag "${tagId}" already exists.`);
       return;
     }
+    const plcValue = document.getElementById("f_plc").value.trim();
     tags.unshift({
       tag: tagId,
       desc: document.getElementById("f_desc").value.trim(),
-      plc: document.getElementById("f_plc").value.trim(),
+      plc: plcValue,
       addr: document.getElementById("f_addr").value.trim(),
       status: "unset", notes: "", updated: "", photo: null, photoPreviewUrl: null, raw: "", pv: "",
     });
+    lastUsedPLC = plcValue;
+    lastSavedTag = tagId;
     closeSheet(el.addSheetBackdrop);
     buzz(30);
     saveTags();
